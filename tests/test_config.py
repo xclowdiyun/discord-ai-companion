@@ -123,3 +123,31 @@ def test_game_settings(monkeypatch):
     _set_env(monkeypatch, GAME_TARGET_ROUNDS="2")
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+def test_numbered_bot_profiles(monkeypatch):
+    _set_env(
+        monkeypatch,
+        DISCORD_TOKEN="legacy-token",
+        LLM_API_KEY="legacy-key",
+        LLM_MODEL="legacy-model",
+        DISCORD_TOKEN_2="second-token",
+        LLM_API_KEY_2="second-key",
+        LLM_MODEL_2="second-model",
+        LLM_BASE_URL_2="https://example.test/v1",
+        DISCORD_GUILD_ID_2="456",
+    )
+    profiles = Settings(_env_file=None).bot_profiles()
+    assert len(profiles) == 2
+    assert profiles[0].number == 1
+    assert profiles[1].discord_token.get_secret_value() == "second-token"
+    assert profiles[1].llm_base_url == "https://example.test/v1"
+    assert profiles[1].discord_guild_id == 456
+
+
+def test_numbered_profile_one_can_replace_legacy_values(monkeypatch):
+    monkeypatch.setenv("DISCORD_TOKEN_1", "first-token")
+    monkeypatch.setenv("LLM_API_KEY_1", "first-key")
+    monkeypatch.setenv("LLM_MODEL_1", "first-model")
+    settings = Settings(_env_file=None)
+    assert settings.bot_profiles()[0].discord_token.get_secret_value() == "first-token"
