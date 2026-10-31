@@ -1,68 +1,10 @@
-# Copy to .env and fill in. Never commit .env.
-
-# Discord bot token (Developer Portal -> your app -> Bot -> Reset Token)
-DISCORD_TOKEN=your-first-discord-bot-token
-
-# Optional: your server's ID. Slash commands sync to it instantly
-# (global sync can take a while). Enable Developer Mode in Discord,
-# then right-click the server -> Copy Server ID.
-DISCORD_GUILD_ID=your-first-server-id
-
-# Any OpenAI-compatible endpoint
-LLM_BASE_URL=https://your-provider.example/v1
-LLM_API_KEY=your-first-provider-key
-LLM_MODEL=your-first-model
-
-# A second independent Discord Bot and LLM profile
-DISCORD_TOKEN_2=your-second-discord-bot-token
-DISCORD_GUILD_ID_2=your-second-server-id
-LLM_BASE_URL_2=https://your-second-provider.example/v1
-LLM_API_KEY_2=your-second-provider-key
-LLM_MODEL_2=your-second-model
-
-# Add _3 through _10 for more Bot profiles.
-
 ![Discord AI Companion: your story, your friends, your game master](images/discord-ai-companion-hero-web.jpeg)
 
 # Discord AI Companion
 
-A self-hosted Discord AI platform for normal chat and asynchronous, multi-player
-role-playing games. Each Bot profile can use its own Discord token, AI provider,
-API key, model, and persona while sharing the same command set.
+A private, self-hosted Discord bot that chats using any OpenAI-compatible LLM endpoint. It starts with [OpenRouter](https://openrouter.ai). The longer-term goal is a **Game Master mode**: the bot runs a shared, story-driven adventure for the people in a channel.
 
-## What this repository currently provides
-
-- **Discord chat:** respond to direct `@mentions`, replies, and `/ask`.
-- **Conversation memory:** keep a bounded SQLite context per channel or thread.
-- **Provider flexibility:** use any OpenAI-compatible `LLM_BASE_URL`, including
-  compatible Gemini endpoints, OpenRouter, Ollama, vLLM, or LM Studio.
-- **Up to ten Bot profiles:** configure `DISCORD_TOKEN`, `DISCORD_TOKEN_2` through
-  `DISCORD_TOKEN_10`; each profile can use a different LLM provider and model.
-- **One-terminal multi-Bot startup:** run `python -m companion`, choose how many
-  configured profiles to start, and run them concurrently.
-- **Equal commands for every Bot:** all active profiles register `/ask`, `/reset`,
-  `/help`, `/game`, and `/act`.
-- **Game Master mode:** create a Discord thread, invite human players, generate
-  characters, run rounds, roll 2d6, maintain a story bible, and generate JSON-validated
-  narration.
-- **AI role-playing participants:** a human must explicitly mention a Bot and invite it
-  before it joins. A human can then mention that Bot with `act`; it generates one
-  action of at most 50 words and submits it through the controlled game flow.
-- **Loop prevention:** AI messages cannot invite themselves, trigger another Bot, or
-  start an automatic AI-to-AI conversation loop. Each AI can act once per round.
-- **Per-profile personas:** AI1 through AI10 have separate editable entries in
-  `src/companion/game/ai_roles.py`. They currently all use `Default`, but each entry
-  can later be customized independently.
-- **Cross-process coordination:** shared-database instances use event claims and
-  short game leases to avoid duplicate processing and duplicate round resolution.
-
-## Important deployment limitation
-
-The current game state is stored in SQLite. Separate computers with separate local
-databases do **not** share games, players, rounds, characters, or story history.
-To coordinate across computers, all instances must access the same shared database
-file. For different regions or unreliable network links, replace this with a
-central PostgreSQL/API service; ngrok alone does not synchronize databases.
+> **Status:** Chat MVP is live-tested and working. Game Master mode is built and tested, and awaiting its first live game. See [Roadmap](#roadmap).
 
 ## Roadmap
 
@@ -70,9 +12,7 @@ central PostgreSQL/API service; ngrok alone does not synchronize databases.
 |---|---|---|
 | 0 | Project scaffold, config, LLM client, message splitter, Docker stack | Done |
 | 1 | Chat MVP: Discord connection, `@mention` + `/ask`, SQLite context, rate limiting | Done |
-| 2 | Game Master mode | Built and tested |
-| 3 | Multi-Bot AI player support | Built and tested |
-| 4 | Cross-device shared game service | Planned; requires a central API/database |
+| 2 | Game Master mode | Built; awaiting live test |
 | Later | Public-bot features (see [Future](#future-public-bot-considerations)) | Parked |
 
 ## Architecture
@@ -148,18 +88,8 @@ Discord verification only applies once a bot reaches **100 servers**.
 ### 2. Configure
 
 ```sh
-cp ".env copy" .env
+cp .env.example .env
 ```
-
-On Windows PowerShell, use:
-
-```powershell
-Copy-Item ".env copy" ".env"
-```
-
-The copied file is only a template. Replace every `your-...` value with your own
-credentials. Never paste real tokens or API keys into README, Git, screenshots, or
-Discord messages. If a real token was exposed, reset it in the provider's dashboard.
 
 | Variable | Required | Default | Purpose |
 |---|---|---|---|
@@ -230,17 +160,16 @@ python -m companion
 The terminal asks how many profiles to start. Enter an integer from `1` to the highest
 contiguous profile configured. All selected Bots run concurrently in this one terminal. All
 selected Bots register the same `/game` and `/act` commands and can create or host a game.
-Each instance can receive game messages; shared event claims and short database leases prevent
-duplicate processing and duplicate round resolution when all instances use the same database.
-This also permits profiles to run in separate terminals, but **not** with separate local
-databases.
+The first Bot is the shared event coordinator: it consumes thread messages and runs deadline
+checks use a short shared database lease, while every Bot can execute game commands against the
+shared database. Event claims and game leases avoid duplicate messages and duplicate round
+resolution while keeping the command set equal, even when profiles run in separate terminals.
 
 ### AI players in a shared adventure
 
 Every configured Bot has the same `/game`, `/act`, `/ask`, `/reset`, and `/help` commands.
-Any configured Bot can act as the Game Master through the shared game service; any other Bot
-can join as an AI-controlled player character. A human must explicitly invite a Bot in the
-game thread:
+The first Bot is the GM/event coordinator; the other Bots can join as AI-controlled player
+characters. A human must explicitly invite a Bot in the game thread:
 
 ```text
 @Evil 加入游戏 角色：盗贼，擅长潜行
@@ -303,7 +232,6 @@ src/companion/
   game/
     store.py     # games, players, round posts, story bible
     dice.py      # 2d6 with success / partial / failure
-    ai_roles.py  # independent AI1-AI10 persona definitions
     schemas.py   # JSON shapes the GM must return
     prompts.py   # the GM's prompts (review these, they shape behaviour)
     engine.py    # game lifecycle, rounds, deadlines; Discord-free
