@@ -174,6 +174,9 @@ characters. A human must explicitly invite a Bot in the game thread:
 ```text
 @Evil 加入游戏 角色：盗贼，擅长潜行
 @Evil act
+or:
+@Evil Join the game. Role: Thief, skilled in stealth.
+@Evil act
 ```
 
 The invited Bot uses its numbered persona (and an optional requested `角色：...` or `role: ...`),
